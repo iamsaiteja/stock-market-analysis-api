@@ -2,8 +2,7 @@
 
 # 📈 Stock Market Analysis API
 
-FastAPI-powered Stock Market Analysis API for NSE/BSE with real-time market data, technical indicators, and AI-powered stock insights.
-
+FastAPI-powered Stock Market Analysis API for NSE/BSE with real-time market data, technical indicators, and AI-powered stock insigghts.
 [![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen)](https://stock-market-frontend-nine.vercel.app/)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-black)](https://github.com/iamsaiteja/stock-market-api)
 
