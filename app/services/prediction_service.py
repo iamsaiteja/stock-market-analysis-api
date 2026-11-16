@@ -1,6 +1,6 @@
 import yfinance as yf
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Tuple
 import ta
 
@@ -9,6 +9,12 @@ from app.services.stock_service import format_nse_symbol
 
 
 def calculate_indicators(df: pd.DataFrame) -> dict:
+    required = ['Close', 'High', 'Low', 'Volume']
+    if len(df) < 50 or any(column not in df for column in required):
+        raise ValueError('At least 50 complete OHLCV observations are required.')
+    import numpy as np
+    if not np.isfinite(df[required].to_numpy(dtype=float)).all():
+        raise ValueError('Historical prices contain missing or non-finite values.')
     close = df["Close"]
     high = df["High"]
     low = df["Low"]
@@ -53,19 +59,19 @@ def generate_signal(price: float, indicators: dict) -> Tuple[str, float, list, s
 
     if rsi < 30:
         score += 2
-        reasons.append(f"✅ RSI {rsi:.1f} — Oversold zone, bounce expected (BUY signal)")
+        reasons.append(f"✅ RSI {rsi:.1f} — Oversold zone, rule contributes to BUY score")
     elif rsi > 70:
         score -= 2
-        reasons.append(f"⚠️ RSI {rsi:.1f} — Overbought zone, correction possible (SELL signal)")
+        reasons.append(f"⚠️ RSI {rsi:.1f} — Overbought zone, rule contributes to SELL score")
     else:
         reasons.append(f"📊 RSI {rsi:.1f} — Normal range")
 
     if macd > macd_signal:
         score += 1.5
-        reasons.append(f"✅ MACD ({macd:.2f}) > Signal ({macd_signal:.2f}) — Bullish crossover")
+        reasons.append(f"✅ MACD ({macd:.2f}) > Signal ({macd_signal:.2f}) — MACD above signal line")
     else:
         score -= 1.5
-        reasons.append(f"⚠️ MACD ({macd:.2f}) < Signal ({macd_signal:.2f}) — Bearish crossover")
+        reasons.append(f"⚠️ MACD ({macd:.2f}) < Signal ({macd_signal:.2f}) — MACD at or below signal line")
 
     if sma_20:
         if price > sma_20:
@@ -78,10 +84,10 @@ def generate_signal(price: float, indicators: dict) -> Tuple[str, float, list, s
     if sma_20 and sma_50:
         if sma_20 > sma_50:
             score += 1
-            reasons.append(f"✅ SMA20 > SMA50 — Golden cross (Long-term bullish)")
+            reasons.append(f"✅ SMA20 > SMA50 — SMA20 above SMA50")
         else:
             score -= 1
-            reasons.append(f"⚠️ SMA20 < SMA50 — Death cross (Long-term bearish)")
+            reasons.append(f"⚠️ SMA20 < SMA50 — SMA20 at or below SMA50")
 
     if bb_lower and bb_upper:
         if price <= bb_lower:
@@ -97,7 +103,7 @@ def generate_signal(price: float, indicators: dict) -> Tuple[str, float, list, s
             score += 0.5
             reasons.append(f"✅ Volume {vol_ratio:.1f}x average — Strong buying volume")
 
-    confidence = round(min(abs(score) / max_score * 100, 95), 1)
+    signal_strength = round(min(abs(score) / max_score * 100, 100), 1)
 
     if score >= 2:
         signal = "BUY"
@@ -106,14 +112,8 @@ def generate_signal(price: float, indicators: dict) -> Tuple[str, float, list, s
     else:
         signal = "HOLD"
 
-    if rsi > 70 or rsi < 30:
-        risk_level = "HIGH"
-    elif confidence > 60:
-        risk_level = "MEDIUM"
-    else:
-        risk_level = "LOW"
-
-    return signal, confidence, reasons, risk_level
+    indicator_condition = 'EXTREME_RSI' if rsi > 70 or rsi < 30 else 'NORMAL_RSI'
+    return signal, signal_strength, reasons, indicator_condition
 
 
 def get_prediction(symbol: str) -> PredictionResult:
@@ -121,7 +121,7 @@ def get_prediction(symbol: str) -> PredictionResult:
     ticker = yf.Ticker(fmt_symbol)
     hist = ticker.history(period="6mo")
 
-    if len(hist) < 30:
+    if len(hist) < 50:
         raise ValueError(f"'{symbol}' కోసం sufficient data లేదు.")
 
     info = ticker.info
@@ -129,28 +129,16 @@ def get_prediction(symbol: str) -> PredictionResult:
     company_name = info.get("longName") or info.get("shortName") or symbol
 
     ind_values = calculate_indicators(hist)
-    signal, confidence, reasons, risk_level = generate_signal(current_price, ind_values)
-
-    if signal == "BUY":
-        target_price = round(current_price * 1.05, 2)
-        stop_loss = round(current_price * 0.95, 2)
-    elif signal == "SELL":
-        target_price = round(current_price * 0.95, 2)
-        stop_loss = round(current_price * 1.05, 2)
-    else:
-        target_price = round(current_price * 1.03, 2)
-        stop_loss = round(current_price * 0.97, 2)
+    signal, signal_strength, reasons, indicator_condition = generate_signal(current_price, ind_values)
 
     return PredictionResult(
         symbol=fmt_symbol,
         company_name=company_name,
         current_price=round(current_price, 2),
         signal=signal,
-        confidence=confidence,
+        signal_strength=signal_strength,
         reasons=reasons,
-        risk_level=risk_level,
-        target_price=target_price,
-        stop_loss=stop_loss,
+        indicator_condition=indicator_condition,
         indicators=TechnicalIndicators(
             symbol=fmt_symbol,
             rsi=ind_values.get("rsi"),
@@ -162,5 +150,5 @@ def get_prediction(symbol: str) -> PredictionResult:
             bollinger_upper=ind_values.get("bollinger_upper"),
             bollinger_lower=ind_values.get("bollinger_lower"),
         ),
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
     )

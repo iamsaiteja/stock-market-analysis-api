@@ -2,15 +2,15 @@ from fastapi import APIRouter, HTTPException
 from app.services.prediction_service import get_prediction
 from app.schemas.stock import PredictionResult
 
-router = APIRouter(prefix="/predict", tags=["🤖 AI Predictions"])
+router = APIRouter(prefix="/predict", tags=["🤖 Indicator signals"])
 
 
 @router.get(
     "/{symbol}",
     response_model=PredictionResult,
-    summary="AI Buy/Sell/Hold Prediction",
+    summary="Rule-based Buy/Sell/Hold signal",
     description="""
-    Technical Analysis ఆధారంగా stock కోసం AI prediction ఇస్తుంది.
+    Technical Analysis ఆధారంగా stock కోసం rule-based signal ఇస్తుంది.
 
     **Indicators used:**
     - RSI (Relative Strength Index)
@@ -30,12 +30,12 @@ def predict_stock(symbol: str):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Indicator calculation failed; please retry.")
 
 
 @router.post(
     "/bulk",
-    summary="Bulk AI Predictions",
+    summary="Bulk Indicator signals",
     description="Multiple stocks కోసం ఒకేసారి predictions తీసుకోవడం. Max 5 symbols.",
 )
 def bulk_predictions(symbols: list[str]):
@@ -50,6 +50,6 @@ def bulk_predictions(symbols: list[str]):
             pred = get_prediction(sym)
             results.append({"success": True, "data": pred.model_dump()})
         except Exception as e:
-            results.append({"success": False, "symbol": sym, "error": str(e)})
+            results.append({"success": False, "symbol": sym, "error": "Indicator calculation failed for this symbol."})
 
     return results

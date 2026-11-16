@@ -9,8 +9,8 @@ app = FastAPI(
 ## NSE/BSE Stock Analysis API — Built with FastAPI + yfinance
 
 ### Features:
-- 📈 **Live Stock Prices** — NSE & BSE stocks real-time data
-- 🤖 **AI Buy/Sell Predictions** — Technical analysis based signals
+- 📈 **Live Stock Prices** — NSE & BSE stocks provider data (may be delayed)
+- 🤖 **Rule-based indicator signals** — Technical analysis based signals
 - 📊 **Historical Data** — OHLCV data with custom periods
 - 🔢 **Bulk Operations** — Multiple stocks ఒకేసారి
 
